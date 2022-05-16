@@ -1,0 +1,160 @@
+---
+title: "Final Project"
+output: html_notebook
+Name: 'Daniel Lee'
+---
+
+## IDEA & GOAL
+
+The main goal of this final project is to analyze how variables such as age, batting average and salary of the players are related. At first, the relationship between age and batting average will be analyzed and then find what factors affect the most by creating graphs for other variables with variable, age. And then, the other table 'Salary' would be used to see whether batting average has relationship with salary.
+
+## Setup
+```{r}
+rm(list = ls())
+library(lubridate)
+library(tidyverse)
+library(mosaic)
+library(rvest)
+library(tidyr)
+```
+
+## Loading datasets
+```{r}
+# Loading two tables: 'Player Standard Batting' & 'Salary'
+library(readxl)
+Player_Standard_Batting <- read_excel("~/Desktop/Penn State/Courses/STAT 184/Final Project/Player Standard Batting.xlsx")
+View(Player_Standard_Batting)
+spread(Player_Standard_Batting, Lg, Age)
+
+library(readxl)
+Salary <- read_excel("~/Desktop/Penn State/Courses/STAT 184/Final Project/Salary.xlsx")
+View(Salary)
+spread(Salary, POS, YEARS)
+```
+
+```{r}
+# Removing unnecessary punctuations at the name column for 'Salary' table
+Salary <-
+  Salary %>%
+  mutate(Name = gsub(pattern = "[[:punct:]]", replacement = "", x = Name))
+
+glimpse(Salary)
+```
+
+## Data Wrangling for 'Player Standard Batting' table
+```{r}
+# Creating a new table (PSB) with variables that are necessary and significant & Removing unnecessary punctuations at the name column for 'Player Standard Batting' table
+PSB <- 
+  Player_Standard_Batting %>%
+  filter(POS != "1") %>% 
+  select(Name, Tm, Lg, Age, R, H, HR, RBI, AB, BA, POS) %>%
+  mutate(Name = gsub(pattern = "[[:punct:]]", replacement = "", x = Name))
+
+View(PSB)
+```
+
+```{r}
+# Most Hits and Batting aveage for players who were at bat for more or equal to 300 times. 
+PSB %>%
+  filter(AB >= 300) %>%        # Filtering out players who were not at bat less than 300 games
+  summarise(BA = max(BA, na.rm = TRUE), H = max(H, na.rm = TRUE))
+```
+
+```{r}
+# Counting the number of players who are 27 years old in each team & Removing pitchers and duplicated names from the data table occured due to trade during season.
+PSB %>%
+  group_by(Tm) %>%
+  filter(Age >= 27) %>%
+  filter(POS != "1") %>%                     # Pitchers have a number position = 1 
+  summarise(count = n( )) %>%
+  arrange(desc(count))
+```
+
+### Finding the relationship between age and batting average in two different leagues
+```{r}
+# Plotting a graph: Age vs BA into two different leagues (AL & NL)
+PSB %>%
+  ggplot(aes(x = Age, y = BA, color = Lg)) +
+  stat_smooth() +
+  ylab("Batting Average (BA)") + xlab("Age (years)")
+```
+The graph (figure 1.1) shows that, in average, batters in American league have higher batting average betwen the age of 21 to 37 years old which are most of the players. However, this graph can be also interpreted as national league batters who are younger than 21 years old having more potential. Batting average for national league players could be higher than american league players in few years. The following graph could be altered next year because there are many trades happening between the teams from National league and American league. 
+
+### Would number of hits affect the batting average of the players in the leagues?
+```{r}
+# Plotting a graph: League vs H into two groups (AL & NL)
+PSB %>%
+  ggplot(aes(x = Lg, y = H)) +
+  geom_boxplot()+
+  ylab("Hits (H)") + xlab("League (Lg)")
+```
+This boxplot (figure 1.2) shows how number of hits affect the above graph (BA vs Age). The American League has higher Q1, Q3 and median than National league's Q1, Q3 and median. Although hits are not 100% the factor of having a higher batting average as shown in the figure 1.1, but it is a significant factor.
+
+### Which league players would have a lot of homeruns?
+```{r}
+PSB %>%
+  ggplot(aes(x = Age, y = HR, color = Lg)) +
+  geom_point() +
+  ylab("Homeruns (HR)") + xlab("Age (years)")
+```
+This scatterplot shows that there are more number of american league players that hit around or more than 40 homeruns than the national league hitters. The top 5 players are all from american league, and this shows that number of homeruns also affect the overall batting average. 
+
+### Would batting average have relationship between batting average and salary of the player in the teams?
+```{r}
+# Number of players who had higher average (0.248) of average hits for each team in 2018
+PSB %>%
+  group_by(Tm) %>%
+  filter(BA >= 0.248) %>%
+  filter(POS != "1") %>%         # Pitchers have a number position = 1 / POS does not work 
+  summarise(count = n( )) %>%
+  arrange(desc(count))
+```
+
+```{r}
+# Number of players who earned more than the average salary ($4,520,000) for each team in 2018
+Salary %>%
+  group_by(Tm) %>%
+  filter(AVG > 4520000) %>%
+  filter(POS != "1") %>%         # Pitchers have a number position = 1 / POS does not work 
+  summarise(count = n( )) %>%
+  arrange(desc(count))
+```
+The tables for finding 'Number of players who had higher average (0.248) of average hits for each team in 2018' and the table above shows there isn't any significant relationship betwen the variables for batting average and salary. 
+
+## Data Wrangling for 'Salary' table
+```{r}
+# Finding the average salary in 2018 
+Salary %>%
+  summarise(AVG = mean(AVG, na.rm = TRUE))
+
+# Highest and lowest salary for each position
+Salary %>%
+  group_by(POS) %>%
+  summarise(AVG = max(AVG, na.rm = TRUE))
+
+Salary %>%
+  group_by(POS) %>%
+  summarise(AVG = min(AVG, na.rm = TRUE))
+
+```
+
+
+### Plotting a graph for MLB players average salaries for 2018
+```{r}
+ggplot(data = Salary, aes(x = AVG)) + 
+  geom_histogram(binwidth = 1000000) + 
+  aes(colour = POS)
+```
+This bar chart shows that most of the mlb players receive salaries which are less than $1000000. The majority of mlb players who receive less than $1000000 are pitchers and 1st basements. This graph is reasonable because since not a lot of players are star players nor fixed in lineups, a lot of players tend to get paid less compared to players who are star players. Also, the gap between the players who get paid a lot and less are large. 
+
+```{r}
+Salary %>%
+  ggplot(aes(x = AVG)) +
+  geom_density(color = "black", fill = "gray", alpha = 0.75) +
+  xlab("SALARY") +
+  xlim(545000,30714286)
+```
+This density graph shows a significant trend of the bar chart above. 
+
+## Conclusion
+Based on the following investigations and findings, the project shows that American league has a higher batting average than the batting average for national league because batters in american league have more hits and homeruns in general which can be showed through a box plot and scatter plot above. Also, the analysis of the 'Salary' table shows that the amount of salary does not have a significant relationship with the batting average. Lastly, surprisingly, there are more significant number of players who get paid less than the average salary compared to players who get paid a lot. 
