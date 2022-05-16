@@ -1,0 +1,285 @@
+---
+title: "Bicycle Sharing"
+author: "Daniel Lee"
+date: "October 15th"
+output: 
+    html_notebook:
+    fig_height: 6
+    fig_width: 10
+---
+
+
+# Set Up
+
+### Clean up environment and load packages
+```{r}
+# clean up the RStudio environment 
+rm(list = ls())
+
+# load packages: `tidyverse`, `lubridate`, `devtools` (if others are needed, load them here)
+library(tidyverse)
+library(lubridate)
+library(devtools)
+library(mosaic)
+library(leaflet)
+```
+
+### Load the data
+
+The code chunk below loads the data for you, but you should study each line to understand what it's doing.
+
+```{r}
+### Load the station data set into our RStudio environment as described in the text
+Stations <- mosaic::read.file("http://tiny.cc/dcf/DC-Stations.csv")
+
+### Load the station data set into our RStudio environment as described in the text
+
+# data_site <- "http://tiny.cc/dcf/2014-Q4-Trips-History-Data.rds"          # full data with 600k rows (uncomment to use)
+data_site <- "http://tiny.cc/dcf/2014-Q4-Trips-History-Data-Small.rds"    # small data with 10k rows 
+
+Trips <- readRDS(gzcon(url(data_site)))
+
+
+### Backup code if you need to download the .rds file from the web and load a local version
+
+# Trips <- readRDS("2014-Q4-Trips-History-Data-Small.rds")
+# Trips <- readRDS("2014-Q4-Trips-History-Data.rds")
+
+```
+
+### Always inspect the data tables when you load them
+```{r}
+str(Trips)
+```
+
+
+### Plot check-out times. (reproduce Fig A.15)
+```{r}
+Trips %>%
+  ggplot(aes(x=sdate)) +
+  geom_density(fill="gray", color=NA)
+```
+
+
+
+# A.1 How Long?
+
+```{r}
+Trips <- 
+  Trips %>%
+  mutate(durMin = as.numeric(edate - sdate)/60)  # trip duration in minutes
+# inspect data table; discern units of "durMinutes"
+head(Trips)
+```
+
+Make box & whisker plot showing the distribution of rental duration by client type.  As instructed in the text, make sure you either configure your scale or use a filter to suppress outliers from dictating the axis range.
+
+```{r}
+Trips %>%
+  ggplot(aes(x = client, y = durMin)) + 
+  geom_boxplot() + 
+  ylim(0, 90) +           # restrict plot to 90 minutes or less
+  ylab("Rental Duration (min)") + 
+  xlab("Client Type")
+```
+There are many outliers for registered clients compare to casual clients.
+
+# A.2 When are bikes used?
+
+Note: You'll use several functions that begin with `lubridate::` this means that those functions have come from the `lubridate` R package, which makes it easy to work with dates in R.  The activity template instructed you to load this package already, but you should use Google or the RStudio help to get a sense of the kind of things this package is designed to do.
+
+```{r}
+Trips <- 
+  Trips %>%
+  mutate(dayOfYear = lubridate::yday(sdate), 
+         dayOfWeek = lubridate::wday(sdate), 
+         dayOfWeekLabel = lubridate::wday(sdate, label = TRUE), 
+         hourOfDay = lubridate::hour(sdate), 
+         minuteOfHour = lubridate::minute(sdate))
+```
+
+
+##### Day of the year (1 to 365)
+```{r}
+Trips %>%
+  ggplot(aes(x = dayOfYear)) + 
+  geom_density(fill = "gray", adjust = 2)
+```
+The graph shows a trend of negative slope which means that as day of the year increases, the number of bike use decreases.
+
+
+##### Day of the week (Sunday to Saturday)
+```{r}
+Trips %>%
+  ggplot(aes(x = dayOfWeek)) + 
+  geom_density(fill = "gray", adjust = 2)
+
+```
+
+```{r}
+Trips %>%
+  ggplot(aes(x = dayOfWeekLabel)) + 
+  geom_bar(fill = "gray") 
+```
+
+
+
+##### Hour of the day (0 to 24)
+```{r}
+Trips %>%
+  ggplot(aes(x = hourOfDay)) + 
+  geom_density(fill = "gray", adjust = 2)
+  
+```
+
+
+
+##### Minute in the hour (0 to 60)
+```{r}
+Trips %>%
+  ggplot(aes(x = minuteOfHour)) + 
+  geom_density(fill = "gray", adjust = 2)
+```
+
+
+
+### Group the bike rentals by hour, weekday, & client type
+```{r}
+Trips %>%
+  group_by(client, dayOfWeek, hourOfDay) %>%
+  summarise(count = n()) %>%
+  ggplot(aes(x = hourOfDay, y = count)) + 
+  geom_line(aes(group = dayOfWeek, color = as.character(dayOfWeek))) + 
+  facet_wrap( ~ client)
+
+```
+
+
+
+
+### Construct a similar plot using density rather than frequency
+```{r}
+Trips %>%
+  ggplot(aes(x = hourOfDay)) + 
+  geom_density(aes(group = dayOfWeek, color = as.character(dayOfWeek))) + 
+  facet_wrap( ~ client)
+
+```
+The density for the casual clients are more compacted in the duration of 10-15 hours while for registered clients, they are more compact in the interval of 7-8 hours and 17-18 hours. 
+
+
+
+# A.3 How Far?
+
+We want to calculate the distance between stations using the `haversine()` function.  The `source()` function actually runs an R script found at some URL.  Use a web browser to visit this URL and read about the function (it's only a few lines).
+
+```{r}
+source("http://tiny.cc/dcf/haversine.R")  
+
+head(Stations)
+```
+
+Caution: At some point, the book remarks that "one end of Washington DC to the other is about 14.1 miles." It turns out this seems to be a misleading hint.  When you reach that part of the activity, find the two stations in the data that are farthest apart and investigate their locations to make sure they are legitimate.  You'll probably need to explore a map of the Washington DC area on the Internet to figure things out.
+
+```{r}
+
+# create a working copy of the data & rename to identify starting Station
+Simple <- 
+  Stations %>%
+  rename(sstation = name)
+# create another copy and rename variables for use as the ending station
+Simple2 <- 
+  Simple %>%
+  rename(estation = sstation, lat2 = lat, long2 = long)
+# inspect Simple & Simple2
+head(Simple)
+```
+
+
+```{r}
+head(Simple2)
+```
+
+```{r}
+# join the starting and ending data tables together
+StationPairs <- 
+  merge(Simple, Simple2, by = NULL)
+# inspect station pairs data table
+head(StationPairs)
+```
+
+```{r}
+# compute distances with haversine()
+PairDistances <- 
+  StationPairs %>%
+  transmute(sstation, estation, distance = haversine(lat, long, lat2, long2)) %>%
+  select(sstation, estation, distance)
+# inspect PairDistances
+head(PairDistances)
+```
+
+Graph
+```{r}
+PairDistances %>%
+  ggplot(aes(x = distance)) + 
+  geom_density(fill = "gray")
+```
+
+```{r}
+PairDistances %>%
+  arrange(desc(distance)) %>%
+  head()
+```
+
+Joining PariDistances table with Trips
+```{r}
+RideDistances <- 
+  Trips %>%
+  inner_join(PairDistances, by = c("sstation", "estation"))
+```
+
+Graph
+```{r}
+RideDistances %>%
+  ggplot(aes(x = distance)) + 
+  geom_density(fill = "gray") + 
+  geom_density(data = PairDistances, aes(x = distance), fill = "purple", alpha = 0.1)
+```
+
+
+# A.4 Mapping the Stations
+
+```{r}
+library(leaflet)
+stationMap <-
+  leaflet(Stations) %>%
+  addTiles() %>%
+  addCircleMarkers(radius=2, color="red") %>%
+  setView(-77.04, 38.9, zoom=12)
+
+stationMap
+
+```
+
+Two stations that are the farthest from this map are N George Mason Dr & Wilson Blvd, Arlington, VA 22205 and Deanwood Metro Station, Washington, DC 20019. The distance between those two stations are 15.5 miles
+
+
+
+# A.5 Long-distance stations (Extra Credit)
+
+```{r}
+library(leaflet)
+stationMap <-
+  leaflet(Stations) %>%
+  addTiles() %>%
+  addCircleMarkers(radius=1, color="red") %>%
+  addCircles(radius = ~ mid, color="blue", opacity = 0.001) %>%
+  setView(-77.04, 38.9, zoom=12)
+  
+stationMap
+```
+
+
+
+
+
