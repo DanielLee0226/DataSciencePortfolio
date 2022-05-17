@@ -1,0 +1,251 @@
+---
+title: "Stat 297: Used car data project"
+author: "Daniel Lee"
+output: html_notebook
+---
+
+# Introduction and directions
+
+The purpose of this project is to give you experience sourcing, reading, and using real data to answer research questions using simple linear regression.  You should refer back to your previous homework assignments and R notebooks used in lecture for the relevant R codes.  You are also encouraged to get help from your instructor and TA during office hours.
+
+## Collaboration rules:  
+
+You may consult with up to two classmates for help with this project, but use your own data.  Please identify who you collaborate with here.
+
+## Project premise
+
+Let's assume you are interested in purchasing a used car and you want to use data to help you research what you could consider a 'fair price'.  Obviously, the price of a car depends on many things, including the car's age, mileage, condition, make, and model.  At this time, we only have the tools to consider one predictor variable at a time so you will be using the variable 'age' to predict the price of used cars.  
+
+For this project you will source a new, never seen before dataset by scraping observations from autotrader.com for a make and model of your choosing.  You'll want to ultimately have a dataset of 50 cars, so when you obtain the data ask for a sample of size 60 in case you end up needing to eliminate some of the observations.  
+
+To get your data, go to http://myslu.stlawu.edu/~clee/dataset/autotrader/, choose the make and model, input a zip code, and ask for 60 observations.  If you are choosing a more rare type of car it might be difficult to get 60 observations for certain zip codes.  Try a zip code close to a big city like Boston (02124), Los Angeles (90010), or Chicago (60176). Save the data and choose a name for the dataset with a .csv extension.  After you save the data, you should check the spreadsheet for any cases that should be deleted.  For example, sometimes new cars will be included (mileage of 0), or odd entries with a price of 0 will appear.  Delete these types of cases, and then continue deleting random observations until you have a dataset of size 50. 
+
+You should have a dataset with variables 'year', 'price' (in $1,000's), and 'mileage' (in 1,000's) ready to load into R.  Run the front-matter below to load your data into the workspace and load the packages you are most likely to need for this project.
+
+```{r, echo = F}
+# clean-up R environment
+rm(list = ls())  
+
+# Load Packages 
+library(mosaic)
+library(ggformula)
+library(tidyverse)
+
+# source data
+used_cars_path <- file.choose()  # tell R where your data is located
+used_cars      <- read.csv(used_cars_path,header=T) # load the data and name it 'used_cars'
+
+#add a variable that is named 'age', which is 2020 - year
+used_cars$age <- 2020 - used_cars$year
+```
+
+# Project
+
+Introduce your data using complete sentences.  What kind of car are you looking at? Where did these car listings come from (zip code and town)?  
+
+I am looking at Hyundai Sonata cars with a zip code of 02124 which is Boston. 
+
+## Model: Choose
+
+Use R to compute each of the summary statistics below, writing them in the text next to their names.
+
+  - average age: 4.216667
+  - standard deviation of age: 1.814178
+  - average price: 13.38638
+  - standard deviation of price: 2.996808
+
+```{r}
+mean(~ age, data = used_cars)
+sd(~ age, data = used_cars, na.rm=T)
+mean(~ price, data = used_cars)
+sd(~ price, data = used_cars, na.rm=T)
+```
+
+Produce a scatterplot of the relationship between age and price with the regression line drawn on top.  What do you observe?
+
+```{r}
+gf_point(price ~age, data = used_cars) %>%
+  gf_lm()
+```
+I see a negative association between age and price. This can be interpreted as age of the car increases, the price of the car decreases. 
+
+## Model: Fit
+Fit a simple linear model to your data.  Use R to compute each of the summary statistics below, writing them in the text next to their names. 
+
+  - estimated intercept: 18.1602 
+  - estimated slope: -1.1321
+  - standard error of regression: 2.201
+  - SSModel: 0.7241
+  - SSError: 0.1579
+  - SSTotal: 0.8820
+  - degrees of freedom: 58
+  
+  Interpret, in context, what the slope estimate tells you about age and price in your used car model.  Make sure you add a sentence about why the sign (positive or negative) makes sense.
+
+```{r}
+model <- lm(price ~age, data = used_cars)
+summary(model)
+```
+The slope of -1.1321 makes sense because as the age of the car increases, the price of the car should decrease. 
+
+
+## Model: Assess
+
+#### Residual plots
+
+Produce the appropriate residual plots and comment on how well your data appear to fit the conditions for a simple linear model.  At this point, don't worry about doing any transformations if there are problems with the conditions, just mention them.  
+
+```{r}
+mplot(model, which = 1) # plot the residuals and fitted values
+mplot(model, which = 2) # plot the normal plot for model residuals
+gf_histogram(~model$residuals)
+```
+Based on the Residuals vs Fitted plot, I do not see any heteroskedasticity (fanning) trend. The graph seems to have a straight line close to the residual value of 0. From the normal quantile plot, I see that our residuals have longer tails than I have expected.  Despite these longer tails, the graph seems to have residuals close to symmetric and roughly bell-shaped, as evidenced by the histogram of residuals.
+
+#### Unusual points
+
+Find the car in your sample with the largest (in magnitude) residual.  What is the age and price of this car?
+
+```{r}
+# Price
+used_cars$price[40]
+# Age
+used_cars$age[40]
+```
+The price of this age is $19,500 and the age of the car is 4. 
+
+
+Use R to find this car's studentized residual, leverage, and Cook's distance.  Would any of these values be considered unusual?  Why or why not?
+
+```{r}
+# Studentized residual
+rstudent(model) 
+
+# Leverage
+hatvalues(model)
+
+# Cook's Distance
+cooksplot(model)
+cooks.distance(model)
+```
+studentized residual = 2.8492504432
+Leverage = 0.01690842
+Cook's distance = 6.218215e-02
+
+Some of the points such as point 40, point 38 and point 44 are moderately unusual because these points lie in between the standardized residuals lines of 2 and 3. Points 6, 42, 52, and 54 can be seen as also moderately unusual since the points are between the leverage lines of approxiamtely 0.066 and 0.10. Points 8 and 34 are highly unusual since the points are across the leverage line of 0.10. 
+
+## Model: Use
+
+#### Confidence interval
+Compute and interpret a 95% confidence interval for the slope of your model.
+
+```{r}
+predict.lm(model, newdata=data.frame(age = -1.1321), interval="confidence", level = 0.95)
+confint(model)
+```
+
+We are 95% confident that the true slope is between -1.448306 and -0.8159665.
+
+
+#### Coefficient of determination
+Report the coefficient of determination (r-squared) and show how it can be computed using values from the ANOVA table.  Interpret the value in context using a complete sentence.
+
+```{r}
+# Finding the R-squared using summary
+summary(model)
+
+# Finding the R-squared using ANOVA table
+ANOVA1 <- aov(price~ age, data = used_cars)
+summary(ANOVA1) #R-squared = SSmodel / (SSTotal)
+
+```
+248.9/(248.9+281) = 0.4697112663
+
+Since the R-squared value is not high, the model is not highly significant. In other words, this means that approximately 47% of the variability in price can be explained by the age of the car.
+
+
+#### Hypothesis tests
+
+Test the strength of the linear relationship between age and price using all three methods discussed in class.  For each of them, write the hypotheses (it's fine to type them out without using special symbols), discuss how to calculate test statistic and show its value, indicate the reference distribution (t or F including degrees of freedom), and report the p-values.  At the end, you can write one conclusion in context that reflects the conclusion based on all three p-values.
+
+1. Test for correlation
+H0: rho = 0
+Ha: rho ≠ 0
+
+```{r}
+cor.test(price ~ age, data = used_cars)
+```
+t-statistics = {r(n-2)^(1/2)} / {(1-r^2)^(1/2)}
+             = -7.1677
+p-value = 1.532e-09
+df = 58
+
+2. Test for slope
+H0: beta1 = 0
+Ha: beta1 ≠ 0
+
+```{r}
+summary(model)
+```
+t-statiscis = (predicted_beta1) / SE
+            = -7.168
+p-value = 1.532e-09
+df = 58
+
+3. ANOVA for regression
+
+```{r}
+summary(ANOVA1)
+```
+F statistics = 51.38
+Root of 51.38 is +-7.168 (t-statistics)
+p-value = 1.53e-09
+df = 58
+
+
+Conclusion in context:
+The p-values for all three tests were equivalent to 1.532e-09. With the value of 1.532e-09, this can be concluded that the null hypothesis cannot be rejected for all three tests.
+
+#### Predictions
+
+Suppose you are interested in purchasing a car of this make and model that is five years old.  For each of quantities below, show how to complete the calculations using formulas (with the correct numbers in the correct places). For the intervals, write a sentence that carefully interprets each in terms of car prices.
+
+1. Predicted value for price of a car that is five years old
+Predicted price = 18.1602 - 1.1321(age) = 18.1602 - 1.1321(5)
+                = $12,499.7
+
+2. 90% confidence interval for the *mean price* of a car at this age
+```{r}
+conf.int <- predict.lm(model, newdata=data.frame(age = 5), interval="confidence", level = 0.90) 
+conf.int
+
+# t-multiplier
+qt(0.9, 58)
+```
+Y-hat +-t*SE
+12.4997 +- 1.296319*(0.3995081458) 
+= (11.9815, 13.01759)
+
+We are 90% confident that the average price of an average car age of 5 years is between $11,981.5 and $13,017.59
+
+3. 90% prediction interval for the price of an *individual* car of this age.
+```{r}
+pred.int <- predict.lm(model, newdata=data.frame(age = 5), interval="prediction", level = 0.90) 
+pred.int
+```
+Y-hat +-t*SE
+12.4997 +- 1.296319(2.8662443426)
+= (8.784133, 16.21495)
+
+We are 90% confident that the individual price of an average car age of 5 years is between $8,784.133 and $16,214.95 
+
+# Discussion
+
+According to your model, is there an age at which the car should be free?  If so, find out what this age is and comment on what the 'free car phenomenon' says about the appropriateness of your model.  
+
+18.1602 -1.1321(age) = 0
+--> age = 1.1321/18.1602
+        = 16.0411624415
+        
+The age of 16.0411624415 car would result in a free price of a car. In real life, this does not make sense since age of 16 year old car is not free.
+
