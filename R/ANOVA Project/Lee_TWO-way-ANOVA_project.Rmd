@@ -1,0 +1,204 @@
+---
+title: "Two-Way ANOVA project"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r, echo=F, include=F}
+# front-matter
+rm(list = ls()) #clear the workspace
+
+# load the typical libraries
+library(Stat2Data)
+library(tidyverse)
+library(mosaic)
+library(ggformula)
+library(Lock5Data)
+library(car)
+library(leaps)
+
+
+# define tukey plot function
+TukeyNonaddPlot=function(formula,data,out="n",main="Tukey Nonadditivity Plot",ylab="Residuals"){
+  require(mosaic)
+  mod=aov(formula,data)
+  newdata=mod$model
+  names(newdata)=c("Y","A","B")
+  newdata$A=factor(newdata$A); newdata$B=factor(newdata$B)
+  I=nlevels(newdata$A)
+  J=nlevels(newdata$B)
+  cellmeans=mean(Y~A+B,data=newdata)
+  celltable=matrix(cellmeans,nrow=I,ncol=J)
+  GrandMean=mean(cellmeans)
+  RowEffects=rep(rowMeans(celltable)-GrandMean,J)
+  ColEffects=rep(colMeans(celltable)-GrandMean,each=I)
+  Comparisons=RowEffects*ColEffects/GrandMean
+  CellResid=cellmeans-(RowEffects+ColEffects+GrandMean)
+  
+  plot(CellResid~Comparisons, pch=16, ylab=ylab)
+  modline=lm(CellResid~Comparisons)
+  abline(modline)
+  text(0,min(CellResid),paste("slope=",round(modline$coeff[2],2)),col="blue")
+  if(out=="comp"){return(Comparisons)}
+  if(out=="line"){return(modline)}
+  if(out=="resid"){return(CellResid)}
+}
+```
+
+## Collaboration rules:  
+
+You may consult with up to two classmates for help with this project, but use your own data.  Please identify who you collaborate with here.
+
+**Response:** I will be collaborating with Yunseo Kim.
+
+
+# Instructions
+
+Write a report that includes an introduction to the data, appropriate EDA, model specification, the checking of conditions, and in context conclusions.  To include sections in your report use the # as illustrated by the # Instructions for this section.  Larger section headings have one #, smaller subsection headings have ## or ### or even ####.   There should be a coherent and well-organized narrative in addition to appropriate code and figures.  
+
+# Introduction
+The following dataset is consisted of three different models of Honda Civic, Hyundai Sonata, and Toyota Camry with 2 different zip codes of Boston and Philadelphia which are 02101 and 19019, respectively.
+
+```{r, echo = F}
+# clean-up R environment
+rm(list = ls())  
+
+# Load Packages 
+library(Stat2Data)
+library(tidyverse)
+library(mosaic)
+library(ggformula)
+library(Lock5Data)
+library(car)
+library(leaps)
+
+# source data
+setwd("/Users/dlee/Desktop/Penn State/Semester 4/STAT 297")
+data_A <-read.csv("HondaPilotBoston.csv")
+data_B <-read.csv("HondaPilotPhiladelphia.csv")
+data_C <-read.csv("FordF250Boston.csv")
+data_D <-read.csv("FordF250Philadelphia.csv")
+data_E <-read.csv("ToyotaCamryBoston.csv")
+data_F <-read.csv("ToyotaCamryPhiladelphia.csv")
+data_A$Model = "HondaPilot"
+data_B$Model = "HondaPilot"
+data_C$Model = "FordF250"
+data_D$Model = "FordF250"
+data_E$Model = "ToyotaCamry"
+data_F$Model = "ToyotaCamry"
+data_A$Zip = "02101"
+data_B$Zip = "19019"
+data_C$Zip = "02101"
+data_D$Zip = "19019"
+data_E$Zip = "02101"
+data_F$Zip = "19019"
+used_cars <-rbind(data_A, data_B, data_C, data_D, data_E, data_F)
+
+used_cars$age <- 2020-used_cars$year
+head(used_cars)
+
+#add a variable that is named 'age', which is 2020 - year
+used_cars$age <- 2020 - used_cars$year
+```
+
+# EDA
+
+The following dotplot shows the average price of car with two different zip codes. The dotplot was celled by models which showed variablity between zip codes. The highest avearage price was FordF250 in Philadelphia while the lowest average price was recorded to be Toyota Camry in Boston. One interestig fact from Ford F250 and Honda Pilot in Boston was that there exist a price of 0 car. Also, fromr the interaction plot, there appears to have any interction between models.
+```{r}
+gf_point(price ~ Zip | Model, data = used_cars)
+```
+
+```{r}
+gf_boxplot(price ~ Zip | Model, data = used_cars)
+favstats(price ~ Zip + Model, data = used_cars)
+```
+
+```{r}
+with(used_cars, interaction.plot(Model, Zip, price, col = c("darkgreen", "purple", "red","blue")))
+with(used_cars, interaction.plot(Zip, Model, price, col = c("darkgreen", "purple", "red","blue")))
+```
+
+# Model
+The p-value of the model is <2e-16 which is lower than the significance level of 0.05. Moreover, the p-value of Zip code is 1.66e-05 which is also lower than the significance level. This can be implied that both model and zip code is signficant and influential on average price however, conditions should be checked to present a valid conclusion. According to the normal Q-Q plot, both tails are trailing which does not follow along the normal line. 
+```{r}
+CarMod <-aov(price~ Model+ Zip, data = used_cars)
+summary(CarMod)
+```
+
+# Checking Conditions
+
+## Part 1
+Based on the Fitted vs Residuals plot, we can observe that the plot seems to meet the condition of equal variance partially. If we divide the highest and the lowest standard deviation which are 14.248210 and 4.491919, we get 3.1719650332 which is higher than a value of 2. This indicates that the condition of constant variance is not met. Moreover, the heteroskedasticity trend of the plot seem to prove that the condition of equal variance is not met. Based on this analysis of the reisuduals vs fitted and normality plots, we can assume that the conditions of ANOVA is not met.
+
+In order to satisfy the conditions for ANOVA fully, a transformation is needed. To determine which transformation is needed, a log(mean) vs log(sd) can help to improve the model. Since the slope is -0.159, by using the power equation, p = 1 - slope, the value of -0.472 can be obtained. Since p is approximately close to 0, a logarithm transformation is needed for this model.
+```{r}
+gf_point(CarMod$residuals~CarMod$fitted.values)
+```
+
+```{r}
+gf_qq(~CarMod$residuals) %>% 
+  gf_qqline()
+```
+
+```{r}
+sd(price~ Model+ Zip, data = used_cars)
+```
+
+```{r}
+LogCars <- used_cars %>%
+  group_by(Model, Zip)%>%
+  summarize(mean = mean(price), sd = sd(price))
+
+gf_point(log(sd)~ log(mean), data = LogCars)%>%
+  gf_lm(log(sd)~ log(mean), data = LogCars)
+        
+lm(log(sd)~ log(mean), data = LogCars)
+```
+## Part 2
+Using the logarithm transformation, firstly, the values of negative infinity and zeroes are excluded. Then from the Residuals vs Fitted plot, the condition of equal variance is satisfied. However, based on the normal Q-Q plot, the condition of normality is not met because the plot shows a positively skewed distribution. Since the condition of normality is not satisfied, which ANOVA cannot be used, a conclusion cannot be made.  
+```{r}
+used_cars$log_price <- log(used_cars$price)
+used_cars <- used_cars[-c(8, 181, 188, 237, 258, 284, 606, 690, 713, 769, 776, 816, 824, 842),]
+CarMod2 <-aov(log_price~ Model + Zip, data = used_cars)
+gf_point(CarMod2$residuals~CarMod2$fitted.values)
+```
+
+```{r}
+mplot(CarMod2)[[2]]
+```
+```{r}
+sd(log(price)~Model+Zip, data = used_cars)
+```
+
+## Part 3
+For part 3, the covariates of price and age incorporated. According to the price vs age plot, all of the models seem to have parallel lines which indicates there is no interaction between model and age. If a car is over the age of approximately 13 years, which is a intersection point for Toyota Camry, the car price of all these models are in similar range. On the other hand, based on the price vs mileage plot, there seem to have some interaction between model and mileage. This can be seen in Honda Pilot model however, according to the statistics, the mileage of over 100,000 can be considered to be unreliable and most of the points fall on between 0 to 100,000 mileage so it can be conlcuded that there are no interaction for either age and mileage.
+
+Based on the fitted values vs residuals plot, there appears to be a fanning trend which indicates that the equalvariance condition is not met. The normal Q-Q plot shows trailing at both tails, which indicates that the tails of the distribution are slightly larger. However, unlike the fitted values vs residuals plot and normal Q-Q plot, the histogram of residuals shows that the data is not skewed in either direction or appears to have a symmetric shape. From this conclusion, since the normality and equal variance is not met while follows a perfect normal distribution it is somehow acceptablefor ANOVA conclusions.
+```{r}
+gf_point(price~age, col =~Model, shape  =~Zip, data = used_cars) %>%
+  gf_lm(price~age, col =~Model, shape =~Zip, data = used_cars)
+```
+
+```{r}
+gf_point(price~mileage, col =~Model, shape  =~Zip, data = used_cars)%>%
+  gf_lm(price~mileage, col =~Model, shape =~Zip, data = used_cars)
+```
+```{r}
+CarMod3 <- lm(log(price) ~ age + mileage + Model + Zip, data = used_cars)
+mplot(CarMod3)
+```
+```{r}
+histogram(residuals(CarMod3))
+```
+
+# Conclusions
+Based on the ANOVA table, the p-value of age, mileage and model is less than 2.2e-16 which is much lower than the significance level of 0.05 compared to the p-value of zip code which is 6.727e-07. This result shows that all variables are significant to this model and we can reject the null hypothesis. Therefore, age, mileage, model and zip code have effects on price of these three models and two different zip codes. Moreover, after accounting for age and mileage, the model and zip code of the car will result in differences of prices.
+```{r}
+summary(CarMod3)
+```
+
+```{r}
+anova(CarMod3)
+```
+
