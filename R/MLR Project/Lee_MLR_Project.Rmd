@@ -1,0 +1,179 @@
+---
+title: "Stat 297: Multiple Linear Regression project"
+author: "Daniel Lee"
+output: html_notebook
+---
+
+## Collaboration rules:  
+
+You may consult with up to two classmates for help with this project, but use your own data.  Please identify who you collaborate with here.
+
+## Project premise
+
+In this project you will continue using the car data from the simple linear regression project.  Remind me what kind of car you chose and what zip code you used:
+
+**Response**: I am looking at Hyundai Sonata cars with a zip code of 02124 which is Boston. 
+
+
+Make sure you have a dataset with variables *year*, *price* (in $1,000's), *mileage* (in 1,000's), and *age*.  The front-matter below to is copied exactly from your last project to help you load your data into the workspace and create the variable *age*.  Feel free to change it if you are sourcing and modifying your data in some different way.
+
+**NOTE** I have not included all the R-chunks needed in this poject, and you'll have to add your own where you need them.  You can type out the \```{r} and \``` at the beginning and end of each chunk, or you can use a keyboard shortcut (Ctrl + Alt + i for Windows).
+
+```{r, echo = F}
+# clean-up R environment
+rm(list = ls())  
+
+# Load Packages 
+library(Stat2Data)
+library(tidyverse)
+library(mosaic)
+library(ggformula)
+library(car)
+library(leaps)
+
+# source data
+used_cars_path <- file.choose()  # tell R where your data is located
+used_cars      <- read.csv(used_cars_path,header=T) # load the data and name it 'used_cars'
+
+#add a variable that is named 'age', which is 2020 - year
+used_cars$age <- 2020 - used_cars$year
+```
+
+# Model #1: Use *Age* and *Mileage* as Predictors
+
+ 1. Fit a model with two predictors (*age* and *mileage*) for *price* as the response variable and provide the output (both the model summary and the sequential ANOVA table).
+
+**Response**:
+```{r}
+model <-lm(price ~ age + mileage, data = used_cars)
+summary(model)
+
+anova(model)
+```
+
+ 
+ 2. Find the residual for the very first car in your sample.  Show the actual computation for this part, based on your prediction equation and the data for that car.
+
+**Response**: -2.352621496
+
+13.298 - 15.650621695 = -2.352621496
+
+predicted_price = 17.875929 + (-0.220166)(age) + (-0.084235)(mileage)
+predicted_price = 17.875929 + (-0.220166)(4) + (-0.084235)(15.963)
+predicted_price = 15.650621695
+```{r}
+resid(model)
+
+# Finding the actual price
+head(used_cars)
+
+# Finding the predicted price
+summary(model)
+```
+
+ 2. Assess the importance of each of the predictors in the model.  Make sure you indicate which values from the model output you use to make this assessment, and put any conclusions you make in context. Include the hypotheses you are testing.
+
+**Response**: I believe mileage is a more significant predictor than age because the p-value of mileage for predicting the price is lower than the significance level of 0.05 while the p-value of age is higher than the significance level. The hypothesis test would be 
+
+Ho: beta1 = beta2 = 0
+Ha: beta1 ≠ beta2 
+```{r}
+summary(model)
+```
+ 
+ 3. Use a formal test to assess the overall effectiveness of this model.  What are proper null and alternative hypotheses to test?  Make sure you include the specific values from the output that you are using to reach a conclusion, and explain your conclusion in context.
+
+**Response**: With a pretty high R-squared value, which is 0.7856, the model can be seen effective. The normality graph shows that the points mostly follow along the normal line except some of the points in the tail part. The residuals vs fitted plot also shows the points are almost equally spread out except few of the outliers. Since the p-value, which is less than 2.2e-16, of the model is less than the significance level, we have evidence to reject the null hypothesis mentioned in the previous question. 
+```{r}
+summary(model)
+mplot(model, which = 1)
+mplot(model, which = 2)
+```
+ 
+ 4.  Compute and interpret the variance inflation factor (VIF) for your predictors.  Are you very concerned about multicollinearity?
+
+**Response**: The VIF values of both predictors are 1.96502. I am not concerned about multicolinearity since the values are low. 
+```{r}
+vif(model)
+```
+
+# Model #2: Polynomial model using age
+
+ If you recall, in your last project you discovered the 'free car phenomenon'.  This occurs when the regression line predicts a price of 0 or below as the line decreases for older cars.  In this section you will fit a polynomial model to perhaps avoid the 'free car'.
+
+**Response**:
+ 
+ 1. Fit a quadratic model using *age* to predict *price*.  Write the prediction equation below, and show a scatterplot of the data with the quadratic curve drawn on it.  
+
+**Response**: price = beta0 + beta1(age) + beta2(age^2)
+ 
+```{r}
+# HINT: sample code for plotting a curve (you'll need to change the values in the 'curve' function to actually get it to work properly...)
+plot(price ~ age, data = used_cars); curve(21 + -1.7*x + -0.005*x^2, add = T)
+```
+
+2. You are looking at a 5 year-old car of your model and want to find an interval that is likely to contain its price using your quadratic model. Interpret your interval in context.
+
+**Response**:I am 95% certian that the mean price for all 5 year-old  car is between $11839.98 and $13385.45.
+```{r}
+quad_model <- lm(price ~ age + I(age^2), data = used_cars)
+predict.lm(quad_model, newdata = list(age = 5), interval = "confidence")
+```
+
+3. Does the quadratic model allow for some *age* where a car has a zero or negative predicted price?  Explain how you decided whether your answer was yes or no.
+
+**Response**: price = 17.53726 + -0.82300(age) + -0.03238(age^2)
+If the age of the car over approximately 13.9 years, the predicted price would be negative. 
+```{r}
+# To find the intercept and slopes
+summary(quad_model)
+```
+
+4. What happens in the quadratic model for cars that are very old?  Can you think of a plausible real-world explanation, or is this a flaw in the quadratic model?
+
+**Response**:price = 17.53726 + -0.82300(age) + -0.03238(age^2)
+If the age of the car is very old, the predicted price results as a negative value. In the real world, it does not make sense to have a negative price. I believe it means that if the predicted price of the car results as a negative value, the car is old enough to value a car with a price which means basically priceless.
+```{r}
+# To find the intercept and slopes
+summary(quad_model)
+```
+
+5. Would the fit improve significantly if you also included a cubic term?  Justify your answer.
+
+**Response**: Based on the summary of the model, including the cubic term does not improve significantly. 
+```{r}
+cubic_model <- lm(price ~ age + I(age^2) + I(age^3), data = used_cars)
+summary(cubic_model)
+```
+
+
+# Model #3: Complete second-order model
+
+
+1. Write down the complete second order model for predicting a used car price based on age and mileage.  Because you are writing down the model, not the fitted model, your answer should be in terms of betas (you can just write beta1, beta2, etc) and not actual values.
+
+**Response**: price = beta0 + beta1(age) + beta2(mileage) + beta3(age^2) +beta4(mileage^2) + beta5(age*mileage) + e
+
+2. Use R to estimate the coefficients for the model you described in part 1.  Include the summary and anova tables generated by the corresponding functions in R.
+
+**Response**: price = beta0 + beta1(age) + beta2(mileage) + beta3(age^2) +beta4(mileage^2) + beta5(age*mileage)
+
+```{r}
+summary(lm(price ~ age + mileage + I(age^2) + I(mileage^2) + age:mileage, data = used_cars))
+anova(lm(price ~ age + mileage + I(age^2) + I(mileage^2) + age:mileage, data = used_cars))
+```
+
+# Wrap-up
+
+Based on the various model you have considered for predicting the price of a used car, which model would you actually recommend using in practice?  Give some justification for your answer, and produce residual plots for this model.  Comment on what you observe in the residual plots.
+
+**Response**: I would recommend the second order model. The second order model produces a pretty high R-squared value which indicates the significance to this model. Based on the residuals plots, the normality condition is mostly satisfied except few of the points in long tails. Moreover, the points are mostly spread out in the residuals vs Fitted plot. Lastly, the points in the cooksplot seems to be located reasonably excpet 5-6 influential points.
+```{r}
+SOM <- lm(price ~ age + mileage + I(age^2) + I(mileage^2) + age:mileage, data = used_cars)
+
+summary(SOM)
+mplot(SOM, which = 1)
+mplot(SOM, which = 2)
+cooksplot(SOM)
+```
+
